@@ -4,64 +4,69 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is an e-commerce data utilities project that provides query functions for a SQLite database. The project uses TypeScript.
-
-## Database Schema
-
-The SQLite database contains tables for a complete e-commerce system including:
-
-- customers, addresses, customer_segments, customer_activity_log
-- products, categories, inventory, warehouses
-- orders, order_items
-- reviews
-- promotions
-
-See `schema.ts` for the complete database schema definition.
-
-## Project Structure
-
-- `src/main.ts` - Entry point (currently minimal implementation)
-- `src/schema.ts` - Database schema creation functions
-- `src/queries/` - Directory containing all query modules:
-  - `customer_queries.ts` - Customer-related queries
-  - `product_queries.ts` - Product catalog queries
-  - `order_queries.ts` - Order management queries
-  - `analytics_queries.ts` - Analytics and reporting queries
-  - `inventory_queries.ts` - Inventory management queries
-  - `promotion_queries.ts` - Promotion queries
-  - `review_queries.ts` - Product review queries
-  - `shipping_queries.ts` - Shipping queries
+E-commerce data utilities project providing query functions for a SQLite database. Uses TypeScript with the `sqlite` wrapper (Promise-based) over `sqlite3`.
 
 ## Development Commands
 
 ```bash
-# Install dependencies
+# Install dependencies and initialize
 npm run setup
+
+# Run the main entry point
+npx tsx src/main.ts
+
+# Run the Claude Agent SDK script
+npm run sdk
 ```
+
+## Architecture
+
+- `src/main.ts` - Entry point: opens SQLite DB and creates schema
+- `src/schema.ts` - All table DDL (customers, products, orders, inventory, promotions, reviews, etc.)
+- `src/queries/` - Query modules organized by domain (customer, product, order, analytics, inventory, promotion, review, shipping)
+
+The project uses the `sqlite` npm package which wraps `sqlite3` with async/await support. The `Database` type from `sqlite` is passed to all query functions.
 
 ## Working with Queries
 
-All query functions return Promises and follow these patterns:
-
-- Single record queries use `db.get()`
-- Multiple record queries use `db.all()`
-- Use parameterized queries to prevent SQL injection
-- Handle errors by rejecting the Promise
-
-Example query pattern:
+Query functions take a `Database` instance as first parameter and return Promises directly via `db.get()` (single row) or `db.all()` (multiple rows). Use parameterized queries (`?` placeholders) for all user inputs.
 
 ```typescript
-export function getCustomerByEmail(db: Database, email: string): Promise<any> {
-  const query = `SELECT * FROM customers WHERE email = ?`;
-  return new Promise((resolve, reject) => {
-    db.get(query, [email], (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
+import { Database } from "sqlite";
+
+export async function getCustomerByEmail(
+  db: Database,
+  email: string,
+): Promise<any> {
+  return db.get(`SELECT * FROM customers WHERE email = ?`, [email]);
 }
 ```
 
 ## Critical Guidance
 
-- Critical: All database queries must be written in the ./src/queries dir
+- All database queries must be written in `./src/queries/`
+
+## Hook System Learnings
+
+### Exit Codes
+
+- exit(0) = Allow the tool to proceed
+- exit(2) = Block the tool with error message
+- stdout messages shown to Claude on block
+
+### Hook Input (stdin)
+
+- JSON with tool_input containing tool parameters
+- tool_input.file_path for Read tool
+- tool_input.content for Write tool
+
+### Settings.json Structure
+
+- PreToolUse: runs BEFORE tool execution
+- PostToolUse: runs AFTER tool execution
+- matcher: regex pattern for tool names
+
+### Debugging Tips
+
+- Use: `jq . > debug.json` to inspect stdin
+- Check: `node hooks/my_hook.js < test.json`
